@@ -285,6 +285,7 @@ AddInputDevice(ClientPtr client, DeviceProc deviceProc, Bool autoStart)
     dev->deviceGrab.ActivateGrab = ActivateKeyboardGrab;
     dev->deviceGrab.DeactivateGrab = DeactivateKeyboardGrab;
     if (!(dev->deviceGrab.sync.event = calloc(1, sizeof(InternalEvent)))) {
+        dixFreePrivates(dev->devPrivates, PRIVATE_DEVICE);
         free(dev);
         return NULL;
     }
@@ -302,6 +303,7 @@ AddInputDevice(ClientPtr client, DeviceProc deviceProc, Bool autoStart)
      */
     if (dixCallDeviceAccessCallback(client, dev, DixCreateAccess)) {
         dixFreePrivates(dev->devPrivates, PRIVATE_DEVICE);
+        free(dev->deviceGrab.sync.event);
         free(dev);
         return NULL;
     }
@@ -1678,6 +1680,8 @@ InitTouchClassDeviceStruct(DeviceIntPtr device, unsigned int max_touches,
     free(touch->touches);
     free(touch);
 
+    device->touch = NULL;
+
     return FALSE;
 }
 
@@ -2206,11 +2210,9 @@ ProcGetKeyboardControl(ClientPtr client)
     for (int i = 0; i < 32; i++)
         reply.map[i] = ctrl->autoRepeats[i];
 
-    if (client->swapped) {
-        swapl(&reply.ledMask);
-        swaps(&reply.bellPitch);
-        swaps(&reply.bellDuration);
-    }
+    X_REPLY_FIELD_CARD32(ledMask);
+    X_REPLY_FIELD_CARD16(bellPitch);
+    X_REPLY_FIELD_CARD16(bellDuration);
 
     return X_SEND_REPLY_SIMPLE(client, reply);
 }
@@ -2356,11 +2358,9 @@ ProcGetPointerControl(ClientPtr client)
         .threshold = ctrl->threshold
     };
 
-    if (client->swapped) {
-        swaps(&reply.accelNumerator);
-        swaps(&reply.accelDenominator);
-        swaps(&reply.threshold);
-    }
+    X_REPLY_FIELD_CARD16(accelNumerator);
+    X_REPLY_FIELD_CARD16(accelDenominator);
+    X_REPLY_FIELD_CARD16(threshold);
 
     return X_SEND_REPLY_SIMPLE(client, reply);
 }
@@ -2444,9 +2444,7 @@ ProcGetMotionEvents(ClientPtr client)
         .nEvents = nEvents,
     };
 
-    if (client->swapped) {
-        swapl(&reply.nEvents);
-    }
+    X_REPLY_FIELD_CARD32(nEvents);
 
     return X_SEND_REPLY_WITH_RPCBUF(client, reply, rpcbuf);
 }
@@ -2755,9 +2753,7 @@ AllocDevicePair(ClientPtr client, const char *name,
         return BadAlloc;
 
     if (asprintf(&dev_name, "%s pointer", name) == -1) {
-        RemoveDevice(pointer, FALSE);
-
-        return BadAlloc;
+        goto remove_pointer;
     }
     pointer->name = dev_name;
 
@@ -2775,16 +2771,11 @@ AllocDevicePair(ClientPtr client, const char *name,
 
     keyboard = AddInputDevice(client, keybd_proc, TRUE);
     if (!keyboard) {
-        RemoveDevice(pointer, FALSE);
-
-        return BadAlloc;
+        goto remove_pointer;
     }
 
     if (asprintf(&dev_name, "%s keyboard", name) == -1) {
-        RemoveDevice(keyboard, FALSE);
-        RemoveDevice(pointer, FALSE);
-
-        return BadAlloc;
+        goto remove_both_devices;
     }
     keyboard->name = dev_name;
 
@@ -2807,15 +2798,23 @@ AllocDevicePair(ClientPtr client, const char *name,
         if (!pointer->unused_classes || !keyboard->unused_classes) {
             free(keyboard->unused_classes);
             free(pointer->unused_classes);
-            return BadAlloc;
+            pointer->unused_classes = NULL;
+            keyboard->unused_classes = NULL;
+            goto remove_both_devices;
         }
     }
 
     *ptr = pointer;
-
     *keybd = keyboard;
 
     return Success;
+
+remove_both_devices:
+    RemoveDevice(keyboard, FALSE);
+
+remove_pointer:
+    RemoveDevice(pointer, FALSE);
+    return BadAlloc;
 }
 
 /**

@@ -481,6 +481,8 @@ ms_present_unflip(ScreenPtr screen, uint64_t event_id)
         }
     }
 
+    ms->drmmode.present_flipping = FALSE;
+
     for (i = 0; i < config->num_crtc; i++) {
         xf86CrtcPtr crtc = config->crtc[i];
         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
@@ -504,7 +506,6 @@ ms_present_unflip(ScreenPtr screen, uint64_t event_id)
     }
 
     present_event_notify(event_id, 0, 0);
-    ms->drmmode.present_flipping = FALSE;
 }
 #endif
 
@@ -533,6 +534,10 @@ ms_present_screen_init(ScreenPtr screen)
     modesettingPtr ms = modesettingPTR(scrn);
     uint64_t value;
     int ret;
+
+#ifndef DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP
+#define DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP 0x15
+#endif
 
     ret = drmGetCap(ms->fd, ms->atomic_modeset ?
                             DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP :

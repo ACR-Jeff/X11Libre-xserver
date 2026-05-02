@@ -71,7 +71,7 @@ SOFTWARE.
 #endif
 
 #ifndef _X_ATTRIBUTE_VPRINTF
-# if defined(__GNUC__) && (__GNUC__ >= 2) && (!defined(__APPLE__)) && (!defined(__FreeBSD__))
+# if defined(__GNUC__) && (__GNUC__ >= 2) && !defined(__clang__)
 #  define _X_ATTRIBUTE_VPRINTF(fmt, firstarg) \
           __attribute__((__format__(gnu_printf, fmt, firstarg)))
 # else
@@ -88,7 +88,6 @@ SOFTWARE.
 #define MAX_REQUEST_SIZE 65535
 #endif
 
-typedef struct _FontPathRec *FontPathPtr;
 typedef struct _NewClientRec *NewClientPtr;
 
 #ifndef xnfalloc

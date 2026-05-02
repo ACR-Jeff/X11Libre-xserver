@@ -270,8 +270,8 @@ UseMsg(void)
     ErrorF("-br                    create root window with black background\n");
     ErrorF("+bs                    enable any backing store support\n");
     ErrorF("-bs                    disable any backing store support\n");
-    ErrorF("+byteswappedclients    Allow clients with endianess different to that of the server\n");
-    ErrorF("-byteswappedclients    Prohibit clients with endianess different to that of the server\n");
+    ErrorF("+byteswappedclients    Allow clients with endianness different to that of the server\n");
+    ErrorF("-byteswappedclients    Prohibit clients with endianness different to that of the server\n");
     ErrorF("-c                     turns off key-click\n");
     ErrorF("c #                    key-click volume (0-100)\n");
     ErrorF("-cc int                default color visual class\n");
@@ -314,6 +314,7 @@ UseMsg(void)
     ErrorF("ttyxx                  server started from init on /dev/ttyxx\n");
     ErrorF("v                      video blanking for screen-saver\n");
     ErrorF("-v                     screen-saver without video blanking\n");
+    ErrorF("-verbose [n]           verbose startup messages\n");
     ErrorF("-wr                    create root window with white background\n");
     ErrorF("-maxbigreqsize         set maximal bigrequest size \n");
 #ifdef XINERAMA
@@ -404,6 +405,7 @@ void
 ProcessCommandLine(int argc, char *argv[])
 {
     int i, skip;
+    int verbosity = 0;
 
     defaultKeyboardControl.autoRepeat = TRUE;
 
@@ -660,6 +662,21 @@ ProcessCommandLine(int argc, char *argv[])
             defaultScreenSaverBlanking = PreferBlanking;
         else if (strcmp(argv[i], "-v") == 0)
             defaultScreenSaverBlanking = DontPreferBlanking;
+        else if (strcmp(argv[i], "-verbose") == 0) {
+            int n = i + 1; /* next argument */
+            verbosity++;
+            if (n < argc && argv[n] && argv[n][0] != '-') {
+                char *end;
+                long val;
+
+                val = strtol(argv[n], &end, 0);
+                if (*end == '\0') {
+                    verbosity = val;
+                    i = n;
+                }
+            }
+            xorgLogVerbosity = verbosity;
+        }
         else if (strcmp(argv[i], "-wr") == 0)
             whiteRoot = TRUE;
         else if (strcmp(argv[i], "-background") == 0) {
@@ -824,8 +841,14 @@ set_font_authorizations(char **authorizations, int *authlen, void *client)
 
         len = strlen(hnameptr) + 1;
         result = calloc(1, len + sizeof(AUTHORIZATION_NAME) + 4);
-        if (!result)
+        if (result == NULL) {
+#if defined(HAVE_GETADDRINFO)
+            if (ai) {
+                freeaddrinfo(ai);
+            }
+#endif
             return 0;
+        }
 
         p = result;
         *p++ = sizeof(AUTHORIZATION_NAME) >> 8;

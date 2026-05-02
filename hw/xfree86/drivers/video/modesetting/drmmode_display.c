@@ -667,8 +667,10 @@ drmmode_crtc_get_fb_id(xf86CrtcPtr crtc, uint32_t *fb_id, int *x, int *y)
                 msGetPixmapPriv(drmmode, drmmode_crtc->prime_pixmap);
             *fb_id = ppriv->fb_id;
             *x = 0;
-        } else
+        } else {
+            *fb_id = drmmode->fb_id;
             *x = drmmode_crtc->prime_pixmap_x;
+        }
         *y = 0;
     }
     else if (trf->buf[trf->back_idx ^ 1].px) {
@@ -1513,7 +1515,7 @@ static void drmmmode_prepare_modeset(ScrnInfoPtr scrn)
     ScreenPtr pScreen = scrn->pScreen;
     modesettingPtr ms = modesettingPTR(scrn);
 
-    if (ms->drmmode.pending_modeset)
+    if (!ms->drmmode.present_flipping || ms->drmmode.pending_modeset)
         return;
 
     /*
@@ -3624,6 +3626,8 @@ drmmode_connector_check_vrr_capable(uint32_t drm_fd, int connector_id)
 
     props = drmModeObjectGetProperties(drm_fd, connector_id,
                                     DRM_MODE_OBJECT_CONNECTOR);
+    if (!props)
+        return FALSE;
 
     for (i = 0; !found && i < props->count_props; ++i) {
         drmModePropertyPtr drm_prop = drmModeGetProperty(drm_fd, props->props[i]);

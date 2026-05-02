@@ -112,6 +112,10 @@ conf_data.set('GBM_BO_FD_FOR_PLANE',
               build_glamor and gbm_dep.found() and gbm_dep.version().version_compare('>= 21.1') ? '1' : false)
 conf_data.set('GBM_BO_WITH_MODIFIERS2',
               build_glamor and gbm_dep.found() and gbm_dep.version().version_compare('>= 21.3') ? '1' : false)
+conf_data.set('GBM_HAVE_BO_USE_LINEAR',
+              build_glamor and gbm_dep.found() and cc.has_header_symbol('gbm.h', 'GBM_BO_USE_LINEAR', dependencies : gbm_dep )  ? '1' : false)
+conf_data.set('GBM_HAVE_BO_USE_FRONT_RENDERING',
+              build_glamor and gbm_dep.found() and cc.has_header_symbol('gbm.h','GBM_BO_USE_FRONT_RENDERING', dependencies: gbm_dep ) ? '1' : false)
 
 conf_data.set_quoted('SERVER_MISC_CONFIG_PATH', serverconfigdir)
 conf_data.set_quoted('PROJECTROOT', get_option('prefix'))
@@ -193,6 +197,16 @@ if conf_data.get('HAVE_GETPEEREID').to_int() == 0 and conf_data.get('HAVE_GETPEE
         conf_data.set('NO_LOCAL_CLIENT_CRED', 1)
     endif
 endif
+
+conf_data.set(
+  'BSD44SOCKETS',
+  cc.has_member(
+     'struct sockaddr_in', 'sin_len',
+     prefix: ['#include <sys/types.h>', '#include <sys/socket.h>',
+              '#include <netinet/in.h>'],
+  )  ? '1' : false,
+  description: 'Define to 1 if `struct sockaddr_in\' has a `sin_len\' member',
+)
 
 conf_data.set('UNIXCONN', '1')
 conf_data.set('IPv6', build_ipv6 ? '1' : false)
@@ -327,8 +341,15 @@ conf_data.set('PCVT_SUPPORT', supports_pcvt ? '1' : false)
 conf_data.set('SYSCONS_SUPPORT', supports_syscons ? '1' : false)
 conf_data.set('WSCONS_SUPPORT', supports_wscons ? '1' : false)
 conf_data.set('XSERVER_LIBPCIACCESS', get_option('pciaccess') ? '1' : false)
+if get_option('pciaccess')
+    pciaccess_dep = dependency('pciaccess', required: build_xorg)
+    conf_data.set('HAVE_PCI_DEVICE_IS_BOOT_DISPLAY',
+                  cc.has_function('pci_device_is_boot_display', dependencies: pciaccess_dep) ? '1' : false)
+endif
 conf_data.set('XSERVER_PLATFORM_BUS', build_udev_kms ? '1' : false)
 conf_data.set('XSERVER_SCREEN_VRR', '1')
+
+conf_data.set_quoted('DEFAULT_LOGDIR', log_dir)
 
 version_data = configuration_data()
 version_data.set('VENDOR_RELEASE', '@0@'.format(release))
@@ -357,8 +378,8 @@ xorg_data.set('XORG_VERSION_CURRENT', release)
 xorg_data.set_quoted('XF86CONFIGFILE', 'xorg.conf')
 xorg_data.set_quoted('XCONFIGFILE', 'xorg.conf')
 xorg_data.set_quoted('XCONFIGDIR', 'xorg.conf.d')
-xorg_data.set_quoted('DEFAULT_XDG_DATA_HOME', '.local/share')
-xorg_data.set_quoted('DEFAULT_XDG_DATA_HOME_LOGDIR', 'xorg')
+xorg_data.set_quoted('DEFAULT_XDG_STATE_HOME', '.local/state')
+xorg_data.set_quoted('DEFAULT_XDG_STATE_HOME_LOGDIR', 'xorg')
 xorg_data.set_quoted('DEFAULT_LOGDIR', log_dir)
 xorg_data.set_quoted('DEFAULT_LOGPREFIX', 'Xorg.')
 xorg_data.set_quoted('DEFAULT_MODULE_PATH', join_paths(get_option('prefix'), module_dir))
@@ -388,7 +409,6 @@ elif host_machine.system() == 'netbsd' or host_machine.system() == 'openbsd'
 endif
 
 xwin_data = configuration_data()
-xwin_data.set_quoted('DEFAULT_LOGDIR', log_dir)
 xwin_data.set('HAS_DEVWINDOWS', host_machine.system() == 'cygwin' ? '1' : false,
               description: 'Has /dev/windows for signaling new win32 messages')
 xwin_data.set('RELOCATE_PROJECTROOT', host_machine.system() == 'windows' ? '1' : false,
@@ -415,7 +435,6 @@ if build_xorg_sdk
         [
             'Xprintf.h',
             'callback.h',
-            'closure.h',
             'colormap.h',
             'colormapst.h',
             'compiler.h',

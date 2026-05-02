@@ -83,7 +83,7 @@ endforeach
 
 add_project_arguments(common_wflags, language : ['c', 'objc'])
 
-libdrm_req = '>= 2.4.116'
+libdrm_req = '>= 2.4.89'
 libselinux_req = '>= 2.0.86'
 xext_req = '>= 1.0.99.4'
 xproto_req = '>= 7.0.31'
@@ -437,7 +437,7 @@ foreach t : test_sha1
             sha1_dep = libsha1_dep
         endif
     elif t == 'libnettle'
-        nettle_dep = dependency('nettle', required: false)
+        nettle_dep = dependency('nettle', version: '>= 2.6', required: false)
         if nettle_dep.found()
             sha1_found = true
             sha1_dep = nettle_dep

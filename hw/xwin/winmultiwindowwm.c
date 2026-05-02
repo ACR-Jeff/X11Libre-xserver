@@ -31,6 +31,7 @@
  */
 #include <xwin-config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -905,6 +906,7 @@ winMultiWindowWMProc(void *pArg)
                -- independently, the WM_TAKE_FOCUS protocol determines whether
                the WM should send a WM_TAKE_FOCUS ClientMessage.
             */
+            if (pNode->msg.iWindow)
             {
               Bool neverFocus = FALSE;
               xcb_get_property_cookie_t cookie;
@@ -918,7 +920,7 @@ winMultiWindowWMProc(void *pArg)
               }
 
               if (!neverFocus)
-                xcb_set_input_focus(pWMInfo->conn, XCB_INPUT_FOCUS_POINTER_ROOT,
+                xcb_set_input_focus(pWMInfo->conn, XCB_INPUT_FOCUS_PARENT,
                                     pNode->msg.iWindow, XCB_CURRENT_TIME);
 
               if (IsWmProtocolAvailable(pWMInfo,
@@ -927,6 +929,13 @@ winMultiWindowWMProc(void *pArg)
                 SendXMessage(pWMInfo->conn,
                              pNode->msg.iWindow,
                              pWMInfo->atmWmProtos, pWMInfo->atmWmTakeFocus);
+
+            }
+            else
+            /* Set the input focus to none */
+            {
+              xcb_set_input_focus(pWMInfo->conn, XCB_INPUT_FOCUS_NONE,
+                                  XCB_NONE, XCB_CURRENT_TIME);
 
             }
             break;
@@ -1383,13 +1392,13 @@ winMultiWindowXMsgProc(void *pArg)
  * the Window Manager thread.  Called from
  * winscrinit.c/winFinishScreenInitFB ().
  */
-
-Bool
-winInitWM(void **ppWMInfo,
-          pthread_t * ptWMProc,
-          pthread_t * ptXMsgProc,
-          pthread_mutex_t * ppmServerStarted,
-          int dwScreen, HWND hwndScreen, Bool compositeWM)
+bool winInitWM(void **ppWMInfo,
+               pthread_t *ptWMProc,
+               pthread_t *ptXMsgProc,
+               pthread_mutex_t *ppmServerStarted,
+               int dwScreen,
+               HWND hwndScreen,
+               bool compositeWM)
 {
     WMProcArgPtr pArg = calloc(1, sizeof(WMProcArgRec));
     WMInfoPtr pWMInfo = calloc(1, sizeof(WMInfoRec));
@@ -1406,7 +1415,7 @@ winInitWM(void **ppWMInfo,
 
     /* Set a return pointer to the Window Manager info structure */
     *ppWMInfo = pWMInfo;
-    pWMInfo->fCompositeWM = compositeWM;
+    pWMInfo->fCompositeWM = (!!compositeWM);
 
     /* Setup the argument structure for the thread function */
     pArg->dwScreen = dwScreen;
