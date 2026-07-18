@@ -72,7 +72,6 @@ struct _DeviceIntRec;
 struct _Cursor;
 
 typedef struct _BackingStore *BackingStorePtr;
-typedef struct _Window *WindowPtr;
 typedef struct _Property *PropertyPtr;
 
 enum RootClipMode {
@@ -129,7 +128,7 @@ extern _X_EXPORT struct _Cursor *WindowGetDeviceCursor(WindowPtr /*pWin */ ,
 /* Quartz support on Mac OS X uses the HIToolbox
    framework whose GetWindowAttributes function conflicts here. */
 #ifdef __APPLE__
-#define GetWindowAttributes(w,c,x) Darwin_X_GetWindowAttributes(w,c,x)
+#define GetWindowAttributes(w,c,x) Darwin_X_GetWindowAttributes((w),(c),(x))
 extern void Darwin_X_GetWindowAttributes(
 #else
 extern _X_EXPORT void GetWindowAttributes(

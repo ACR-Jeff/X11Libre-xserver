@@ -66,25 +66,23 @@ Equipment Corporation.
 #include "dix/server_priv.h"
 #include "dix/swaprep.h"
 #include "include/extinit.h"
+#include "include/misc.h"
 #include "include/gcstruct.h"
 #include "os/auth.h"
+#include "os/io_priv.h"
 #include "os/log_priv.h"
+#include "Xext/xf86bigfont/xf86bigfontsrv.h"
 
 #include "scrnintstr.h"
 #include "resource.h"
 #include "dixstruct.h"
 #include "cursorstr.h"
-#include "misc.h"
 #include "opaque.h"
 #include "dixfontstr.h"
 #include "dixfont.h"
 #include "xace.h"
 
-#ifdef XF86BIGFONT
-#include "xf86bigfontsrv.h"
-#endif
-
-#define XLFDMAXFONTNAMELEN      256
+#define XLFDMAXFONTNAMELEN      1024
 struct list_font_state {
     char pattern[XLFDMAXFONTNAMELEN];
     int patlen;
@@ -331,18 +329,7 @@ doOpenFont(ClientPtr client, struct open_font_closure *c)
         ((screenInfo.bitmapBitOrder == LSBFirst) ?
          BitmapFormatBitOrderLSB : BitmapFormatBitOrderMSB) |
         BitmapFormatImageRectMin |
-#if GLYPHPADBYTES == 1
-        BitmapFormatScanlinePad8 |
-#endif
-#if GLYPHPADBYTES == 2
-        BitmapFormatScanlinePad16 |
-#endif
-#if GLYPHPADBYTES == 4
         BitmapFormatScanlinePad32 |
-#endif
-#if GLYPHPADBYTES == 8
-        BitmapFormatScanlinePad64 |
-#endif
         BitmapFormatScanlineUnit8;
 
     if (client->clientGone) {
@@ -630,7 +617,7 @@ doListFontsAndAliases(ClientPtr client, struct list_fonts_closure *c)
     int err = Successful;
     FontNamesPtr names = NULL;
     char *name, *resolved = NULL;
-    int namelen, resolvedlen;
+    int namelen, resolvedlen = 0;
     int aliascount = 0;
 
     if (client->clientGone) {
@@ -738,6 +725,10 @@ doListFontsAndAliases(ClientPtr client, struct list_fonts_closure *c)
                  * is BadFontName, indicating the alias resolution
                  * is complete.
                  */
+                if (resolvedlen > XLFDMAXFONTNAMELEN) {
+                    err = BadFontName;
+                    goto ContBadFontName;
+                }
                 memcpy(tmp_pattern, resolved, resolvedlen);
                 if (c->haveSaved) {
                     char *tmpname;
@@ -901,7 +892,7 @@ doListFontsWithInfo(ClientPtr client, struct list_fonts_with_info_closure *c)
 {
     FontPathElementPtr fpe;
     int err = Successful;
-    char *name;
+    char *name = NULL;
     int namelen = 0;
     int numFonts;
     FontInfoRec fontInfo, *pFontInfo;
@@ -961,6 +952,10 @@ doListFontsWithInfo(ClientPtr client, struct list_fonts_with_info_closure *c)
              * is BadFontName, indicating the alias resolution
              * is complete.
              */
+            if (!name) {
+                err = BadFontName;
+                goto ContBadFontName;
+            }
             if (c->haveSaved) {
                 char *tmpname;
                 int tmpnamelen;
@@ -984,6 +979,10 @@ doListFontsWithInfo(ClientPtr client, struct list_fonts_with_info_closure *c)
                 c->savedName = XNFalloc(namelen + 1);
                 memcpy(c->savedName, name, namelen + 1);
                 aliascount = 20;
+            }
+            if (namelen > XLFDMAXFONTNAMELEN) {
+                err = BadFontName;
+                goto ContBadFontName;
             }
             memmove(c->current.pattern, name, namelen);
             c->current.patlen = namelen;
@@ -1097,8 +1096,8 @@ doListFontsWithInfo(ClientPtr client, struct list_fonts_with_info_closure *c)
                     pby += 4;
                 }
             }
-            WriteToClient(client, length, reply);
-            WriteToClient(client, namelen, name);
+            dixWriteToClient(client, length, reply);
+            dixWriteToClient(client, namelen, name);
             if (pFontInfo == &fontInfo) {
                 free(fontInfo.props);
                 free(fontInfo.isStringProp);

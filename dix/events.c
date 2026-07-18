@@ -103,6 +103,7 @@ Equipment Corporation.
 
 #include <dix-config.h>
 
+#include <assert.h>
 #include <X11/X.h>
 #include <X11/extensions/ge.h>
 #include <X11/extensions/XKBproto.h>
@@ -133,16 +134,18 @@ Equipment Corporation.
 #include "dix/screenint_priv.h"
 #include "dix/window_priv.h"
 #include "include/extinit.h"
+#include "include/misc.h"
 #include "os/bug_priv.h"
 #include "os/client_priv.h"
 #include "os/fmt.h"
+#include "os/io_priv.h"
 #include "os/log_priv.h"
 #include "os/probes_priv.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
-#include "xkb/xkbsrv_priv.h"
+#include "Xext/panoramiX/panoramiX.h"
+#include "Xext/panoramiX/panoramiXsrv.h"
+#include "Xext/xinput/exglobals.h"
+#include "Xext/xkeyboard/xkbsrv_priv.h"
 
-#include "misc.h"
 #include "resource.h"
 #include "windowstr.h"
 #include "inputstr.h"
@@ -151,7 +154,6 @@ Equipment Corporation.
 #include "dixstruct.h"
 #include "globals.h"
 #include "xace.h"
-#include "exglobals.h"
 #include "extnsionst.h"
 #include "dispatch.h"
 #include "dixstruct_priv.h"
@@ -278,7 +280,7 @@ static struct DeviceEventTime {
 /**
  * The root window the given device is currently on.
  */
-#define RootWindow(sprite) sprite->spriteTrace[0]
+#define RootWindow(sprite) (sprite)->spriteTrace[0]
 
 static xEvent *swapEvent = NULL;
 static int swapEventLen = 0;
@@ -969,7 +971,7 @@ ChangeToCursor(DeviceIntPtr pDev, CursorPtr cursor)
 #endif /* XINERAMA */
             pScreen = pSprite->hotPhys.pScreen;
 
-        (*pScreen->DisplayCursor) (pDev, pScreen, cursor);
+        dixScreenRaiseDisplayCursor(pScreen, pDev, cursor);
         FreeCursor(pSprite->current, (Cursor) 0);
         pSprite->current = RefCursor(cursor);
     }
@@ -3369,7 +3371,7 @@ InitializeSprite(DeviceIntPtr pDev, WindowPtr pWin)
         (*pScreen->ConstrainCursor) (pDev, pScreen, &pSprite->physLimits);
         (*pScreen->SetCursorPosition) (pDev, pScreen, pSprite->hot.x,
                                        pSprite->hot.y, FALSE);
-        (*pScreen->DisplayCursor) (pDev, pScreen, pSprite->current);
+        dixScreenRaiseDisplayCursor(pScreen, pDev, pSprite->current);
     }
 #ifdef XINERAMA
     if (!noPanoramiXExtension) {
@@ -3448,7 +3450,7 @@ UpdateSpriteForScreen(DeviceIntPtr pDev, ScreenPtr pScreen)
                               &pSprite->hotLimits, &pSprite->physLimits);
     pSprite->confined = FALSE;
     (*pScreen->ConstrainCursor) (pDev, pScreen, &pSprite->physLimits);
-    (*pScreen->DisplayCursor) (pDev, pScreen, pSprite->current);
+    dixScreenRaiseDisplayCursor(pScreen, pDev, pSprite->current);
 
 #ifdef XINERAMA
     if (!noPanoramiXExtension) {
@@ -4929,7 +4931,7 @@ SetInputFocus(ClientPtr client,
         if (depth > focus->traceSize) {
             const size_t num = depth+1;
             WindowPtr *wins = reallocarray(focus->trace, num, sizeof(WindowPtr));
-            if (!num)
+            if (!wins)
                 return BadAlloc;
             focus->traceSize = num;
             focus->trace = wins;
@@ -6145,14 +6147,14 @@ WriteEventsToClient(ClientPtr pClient, int count, xEvent *events)
             (*EventSwapVector[eventFrom->u.u.type & 0177])
                 (eventFrom, eventTo);
 
-            WriteToClient(pClient, eventlength, eventTo);
+            dixWriteToClient(pClient, eventlength, eventTo);
         }
     }
     else {
         /* only one GenericEvent, remember? that means either count is 1 and
          * eventlength is arbitrary or eventlength is 32 and count doesn't
          * matter. And we're all set. Woohoo. */
-        WriteToClient(pClient, count * eventlength, events);
+        dixWriteToClient(pClient, count * eventlength, events);
     }
 }
 

@@ -33,6 +33,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 #include <xorg-config.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -49,11 +50,11 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "dix/screenint_priv.h"
 #include "include/dristruct.h"
 #include "include/extinit.h"
+#include "include/misc.h"
 #include "include/sarea.h"
 
 #include "xf86.h"
 #include "xf86drm.h"
-#include "misc.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
 #include "cursorstr.h"
@@ -2454,5 +2455,4 @@ DRIMoveBuffersHelper(ScreenPtr pScreen,
     }
     else
         *xdir = 1;
-
 }

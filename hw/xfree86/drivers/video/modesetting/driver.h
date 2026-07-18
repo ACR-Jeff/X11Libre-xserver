@@ -176,7 +176,7 @@ typedef struct _modesettingRec {
                                                        Bool);
         void (*egl_exchange_buffers)(PixmapPtr, PixmapPtr);
         struct gbm_device *(*egl_get_gbm_device)(ScreenPtr);
-        Bool (*egl_init)(ScrnInfoPtr, int);
+        Bool (*egl_init2)(ScrnInfoPtr, int, int*, int);
         void (*finish)(ScreenPtr);
         struct gbm_bo *(*gbm_bo_from_pixmap)(ScreenPtr, PixmapPtr);
         Bool (*init)(ScreenPtr, unsigned int);
@@ -192,7 +192,7 @@ typedef struct _modesettingRec {
 #endif
 } modesettingRec, *modesettingPtr;
 
-#define glamor_finish(screen) ms->glamor.finish(screen)
+#define glamor_finish(screen) ms->glamor.finish((screen))
 
 #define modesettingPTR(p) ((modesettingPtr)((p)->driverPrivate))
 modesettingEntPtr ms_ent_priv(ScrnInfoPtr scrn);

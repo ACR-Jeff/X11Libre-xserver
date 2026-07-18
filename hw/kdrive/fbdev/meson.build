@@ -18,7 +18,7 @@ xfbdev_server = executable(
         include_directories('../src'),
         include_directories('../linux'),
     ],
-    dependencies: [ common_dep ],
+    dependencies: [ common_dep, libdrm_dep ],
     link_with: [
         libxserver_main,
         fbdev_glamor,
@@ -28,7 +28,7 @@ xfbdev_server = executable(
         libxserver,
         libxserver_glx,
         libxserver_config,
-        libxserver_xkb_stubs,
+        libxserver_xkeyboard_stubs,
         libglxvnd,
     ],
     install: true,

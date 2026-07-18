@@ -128,12 +128,12 @@ Equipment Corporation.
 #include "dix/registry_priv.h"
 #include "dix/resource_priv.h"
 #include "include/extinit.h"
+#include "include/misc.h"
 #include "os/osdep.h"
 #include "os/probes_priv.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
+#include "Xext/panoramiX/panoramiX.h"
+#include "Xext/panoramiX/panoramiXsrv.h"
 
-#include "misc.h"
 #include "os.h"
 #include "resource.h"
 #include "dixstruct.h"
@@ -144,12 +144,11 @@ Equipment Corporation.
 #include "inputstr.h"
 #include "cursor.h"
 #include "xace.h"
-#include <assert.h>
 #include "gcstruct.h"
 
 #ifdef XSERVER_DTRACE
 
-#define TypeNameString(t) LookupResourceName(t)
+#define TypeNameString(t) LookupResourceName((t))
 #endif
 
 static void RebuildTable(int    /*client */

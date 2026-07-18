@@ -29,6 +29,7 @@
 
 #include "dix-config.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -36,7 +37,8 @@
 
 #include "dix/dix_priv.h"
 #include "os/fmt.h"
-#include "present/present_priv.h"
+#include "os/mathx_priv.h"
+#include "Xext/present/present_priv.h"
 
 #include "inputstr.h"
 #include "xf86str.h"
@@ -57,9 +59,6 @@
 #include <X11/extensions/dpmsconst.h>
 
 #include "driver.h"
-
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
 
 #ifndef GBM_BO_USE_FRONT_RENDERING
 #define GBM_BO_USE_FRONT_RENDERING 0
@@ -862,7 +861,7 @@ drmmode_crtc_set_mode(xf86CrtcPtr crtc, Bool test_only)
 
 #ifdef GLAMOR
     /* Make sure any pending drawing will be visible in a new scanout buffer */
-    if (drmmode->glamor)
+    if (drmmode->glamor_gbm)
         glamor_finish(crtc->scrn->pScreen);
 #endif
 
@@ -1887,7 +1886,14 @@ drmmode_paint_cursor(struct gbm_bo *cursor_bo, int cursor_pitch, int cursor_widt
 
     const CARD32 *src = image + src_y * image_width + src_x;
     for (int i = 0; i < height_todo; i++) {
-        memcpy(cursor + i * cursor_pitch, src + i * image_width, width_todo * sizeof(*cursor));    /* cpu_to_le32(image[i]); */
+#if X_BYTE_ORDER == X_LITTLE_ENDIAN
+        memcpy(cursor + i * cursor_pitch, src + i * image_width, width_todo * sizeof(*cursor));    /* cpu_to_gpu32(image[i]); */
+#else
+        CARD32 *dst = cursor + i * cursor_pitch;
+        for (int j = 0; j < width_todo; j++) {
+            dst[j] = bswap_32(src[i * image_width + j]); /* cpu_to_gpu32(image[i * image_width + j]); */
+        }
+#endif
     }
 }
 
@@ -2184,7 +2190,7 @@ drmmode_clear_pixmap(PixmapPtr pixmap)
 #ifdef GLAMOR
     modesettingPtr ms = modesettingPTR(xf86ScreenToScrn(screen));
 
-    if (ms->drmmode.glamor) {
+    if (ms->drmmode.glamor_gbm) {
         ms->glamor.clear_pixmap(pixmap);
         return;
     }
@@ -2204,7 +2210,7 @@ drmmode_shadow_fb_allocate(xf86CrtcPtr crtc, int width, int height,
     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
     drmmode_ptr drmmode = drmmode_crtc->drmmode;
 
-    struct gbm_bo *ret = gbm_create_best_bo(drmmode, !drmmode->glamor, width, height, DRMMODE_FRONT_BO);
+    struct gbm_bo *ret = gbm_create_best_bo(drmmode, !drmmode->glamor_gbm, width, height, DRMMODE_FRONT_BO);
     if (ret == NULL) {
         xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
                "Couldn't allocate shadow memory for rotated CRTC\n");
@@ -3117,12 +3123,12 @@ drmmode_output_add_gtf_modes(xf86OutputPtr output, DisplayModePtr Modes)
     for (m = Modes; m; m = m->next) {
         if (m->type & M_T_PREFERRED)
             preferred = m;
-        max_x = max(max_x, m->HDisplay);
-        max_y = max(max_y, m->VDisplay);
-        max_vrefresh = max(max_vrefresh, xf86ModeVRefresh(m));
+        max_x = MAX(max_x, m->HDisplay);
+        max_y = MAX(max_y, m->VDisplay);
+        max_vrefresh = MAX(max_vrefresh, xf86ModeVRefresh(m));
     }
 
-    max_vrefresh = max(max_vrefresh, 60.0);
+    max_vrefresh = MAX(max_vrefresh, 60.0);
     max_vrefresh *= (1 + SYNC_TOLERANCE);
 
     m = xf86GetDefaultModes();
@@ -3866,7 +3872,7 @@ drmmode_set_pixmap_bo(drmmode_ptr drmmode, PixmapPtr pixmap, struct gbm_bo *bo)
     ScrnInfoPtr scrn = drmmode->scrn;
     modesettingPtr ms = modesettingPTR(scrn);
 
-    if (!drmmode->glamor)
+    if (!drmmode->glamor_gbm)
         return TRUE;
 
     if (!ms->glamor.egl_create_textured_pixmap_from_gbm_bo(pixmap, bo,
@@ -3919,7 +3925,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr scrn, int width, int height)
     old_fb_id = drmmode->fb_id;
     drmmode->fb_id = 0;
 
-    drmmode->front_bo = gbm_create_best_bo(drmmode, !drmmode->glamor, width, height, DRMMODE_FRONT_BO);
+    drmmode->front_bo = gbm_create_best_bo(drmmode, !drmmode->glamor_gbm, width, height, DRMMODE_FRONT_BO);
     if (!drmmode->front_bo)
         goto fail;
 
@@ -3929,7 +3935,7 @@ drmmode_xf86crtc_resize(ScrnInfoPtr scrn, int width, int height)
     scrn->virtualY = height;
     scrn->displayWidth = pitch / kcpp;
 
-    if (!drmmode->glamor) {
+    if (!drmmode->glamor_gbm) {
         new_pixels = gbm_bo_get_map(drmmode->front_bo);
     }
 
@@ -4777,20 +4783,13 @@ static void drmmode_probe_cursor_size(xf86CrtcPtr crtc)
      * this doesn't happen, there shouldn't be any issues.
      */
 
-    int num_dimensions = !(max_width == max_height);
-    if (min_width > min_height) {
-        for(int j = min_height; j <= min_width; j *= 2) {
-            num_dimensions++;
-        }
-    } else {
-        for(int j = min_width; j <= min_height; j *= 2) {
-            num_dimensions++;
-        }
-
-    }
-
-    for (int j = MAX(min_width, min_height) * 2; j <= MIN(max_width, max_height); j *= 2) {
+    int num_dimensions = 0;
+    for (int i = MIN(min_width, min_height), max = MAX(max_width, max_height); ; i *= 2) {
+        i = MIN(i, max); /* handle not power of 2 */
         num_dimensions++;
+        if (i >= max) {
+            break;
+        }
     }
 
     void *tmp = realloc(drmmode_cursor->dimensions, num_dimensions * sizeof(drmmode_cursor_dim_rec));
@@ -4802,33 +4801,21 @@ static void drmmode_probe_cursor_size(xf86CrtcPtr crtc)
     }
 
     drmmode_cursor->dimensions = tmp;
-    drmmode_cursor->num_dimensions = num_dimensions;
+    drmmode_cursor->num_dimensions = 0;
 
-    int idx = 0;
+#define CLAMP(val,a,b) MAX((a), MIN((b), (val)))
 
-    if (min_width > min_height) {
-        for(int j = min_height; j <= min_width; j *= 2) {
-            drmmode_cursor->dimensions[idx].width = min_width;
-            drmmode_cursor->dimensions[idx].height = j;
-            idx++;
-        }
-    } else {
-        for(int j = min_width; j <= min_height; j *= 2) {
-            drmmode_cursor->dimensions[idx].width = j;
-            drmmode_cursor->dimensions[idx].height = min_height;
-            idx++;
+    for (int i = MIN(min_width, min_height), max = MAX(max_width, max_height); ; i *= 2) {
+        i = MIN(i, max); /* handle not power of 2 */
+        drmmode_cursor->dimensions[drmmode_cursor->num_dimensions].width  = CLAMP(i, min_width, max_width);
+        drmmode_cursor->dimensions[drmmode_cursor->num_dimensions].height = CLAMP(i, min_height, max_height);
+        drmmode_cursor->num_dimensions++;
+        if (i >= max) {
+            break;
         }
     }
 
-    for (int j = MAX(min_width, min_height) * 2; j <= MIN(max_width, max_height); j *= 2) {
-        drmmode_cursor->dimensions[idx].width = j;
-        drmmode_cursor->dimensions[idx].height = j;
-        idx++;
-    }
-
-    /* maximum size */
-    drmmode_cursor->dimensions[num_dimensions - 1].width = max_width;
-    drmmode_cursor->dimensions[num_dimensions - 1].height = max_height;
+#undef CLAMP
 
     xf86DrvMsgVerb(crtc->scrn->scrnIndex, X_INFO, MS_LOGLEVEL_DEBUG,
                    "Minimum cursor size: %dx%d\n",
@@ -4850,7 +4837,7 @@ drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
     width = pScrn->virtualX;
     height = pScrn->virtualY;
 
-    drmmode->front_bo = gbm_create_best_bo(drmmode, !drmmode->glamor, width, height, DRMMODE_FRONT_BO);
+    drmmode->front_bo = gbm_create_best_bo(drmmode, !drmmode->glamor_gbm, width, height, DRMMODE_FRONT_BO);
     if (!drmmode->front_bo) {
         return FALSE;
     }
@@ -4918,26 +4905,42 @@ drmmode_free_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
 }
 
 /* XXX Do we really need to do this? XXX */
-static struct gbm_bo*
-drmmode_create_bpp_probe_bo(drmmode_ptr drmmode,
-                            unsigned width, unsigned height, unsigned depth,
-                            unsigned bpp, struct gbm_device **out_gbm_dev)
+static Bool
+drmmode_supports_depth_bpp(drmmode_ptr drmmode,
+                           int width, int height,
+                           int depth, int bpp)
 {
-    uint32_t format = drmmode_gbm_format_for_depth(depth);
-    struct gbm_device *gbm_dev = drmmode->gbm;
+    /**
+     * We could use gbm here, but it leads to issues.
+     *
+     * See: https://github.com/X11Libre/xserver/issues/2645
+     */
 
-    *out_gbm_dev = NULL;
-    if (!gbm_dev) {
-        gbm_dev = gbm_create_device(drmmode->fd);
-        if (!gbm_dev) {
-            return NULL;
-        }
+    struct drm_mode_create_dumb create_arg;
+    struct drm_mode_destroy_dumb destroy_arg;
+    uint32_t fb_id = 0;
+    Bool ret = FALSE;
 
-        *out_gbm_dev = gbm_dev;
+    memset(&create_arg, 0, sizeof(create_arg));
+    create_arg.width = width;
+    create_arg.height = height;
+    create_arg.bpp = bpp;
+    if (drmIoctl(drmmode->fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_arg)) {
+        return FALSE;
     }
 
-    return gbm_bo_create(gbm_dev, width, height,
-                         format, GBM_BO_USE_SCANOUT | GBM_BO_USE_WRITE);
+    if(drmModeAddFB(drmmode->fd, width, height,
+                    depth, bpp, create_arg.pitch,
+                    create_arg.handle, &fb_id) == 0) {
+        ret = TRUE;
+        drmModeRmFB(drmmode->fd, fb_id);
+    }
+
+    memset(&destroy_arg, 0, sizeof(destroy_arg));
+    destroy_arg.handle = create_arg.handle;
+    drmIoctl(drmmode->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_arg);
+
+    return ret;
 }
 
 /* ugly workaround to see if we can create 32bpp */
@@ -4947,9 +4950,6 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
 {
     drmModeResPtr mode_res;
     uint64_t value;
-    struct gbm_device *free_me = NULL;
-    struct gbm_bo *bo = NULL;
-    uint32_t fb_id;
     int ret;
 
     /* 16 is fine */
@@ -4970,35 +4970,13 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
         mode_res->min_width = 1;
     if (mode_res->min_height == 0)
         mode_res->min_height = 1;
-    /*create a bo */
-    bo = drmmode_create_bpp_probe_bo(drmmode, mode_res->min_width, mode_res->min_height,
-                                     *depth, *bpp, &free_me);
 
-    if (!bo) {
+
+    if (!drmmode_supports_depth_bpp(drmmode, mode_res->min_width, mode_res->min_height, 24, 32)) {
         *bpp = 24;
-        goto out;
     }
 
-    ret = drmModeAddFB(drmmode->fd, mode_res->min_width, mode_res->min_height,
-                       *depth, *bpp, gbm_bo_get_stride(bo), gbm_bo_get_handle(bo).s32, &fb_id);
-
-    if (ret) {
-        *bpp = 24;
-        goto out;
-    }
-
-    drmModeRmFB(drmmode->fd, fb_id);
-
-out:
-    if (bo) {
-        gbm_bo_destroy(bo);
-    }
-
-    if (free_me) {
-        gbm_device_destroy(free_me);
-    }
     drmModeFreeResources(mode_res);
-    return;
 }
 
 void

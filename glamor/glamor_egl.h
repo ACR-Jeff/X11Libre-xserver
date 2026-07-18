@@ -52,8 +52,13 @@ typedef struct {
     /* Optional 2 function that maps a glamor_egl_priv_t to each screen*/
     glamor_egl_priv_t* (*GLAMOR_EGL_PRIV_PROC)(ScreenPtr screen);
 
-    char *glvnd_vendor; /* glvnd vendor library or driver name */
+    const char *glvnd_vendor; /* glvnd vendor library or driver name */
     int fd; /* /dev/dri/cardxx */
+    int gbm_forbidden; /* If glamor should not use libgbm, even if available */
+
+    int auto_dri; /* If glamor should try to automatically enable DRI3 support */
+    int partial_dri_allowed; /* If glamor should initialize DRI3, even if only some operations are available */
+
     int dmabuf_forced; /* If glamor should not use dynamic logic and only listen to the config below */
     int dmabuf_capable; /* If glamor should use dmabufs when using direct rendering (dri) */
 
@@ -69,10 +74,10 @@ typedef struct {
  *
  * glamor_egl_conf is a pointer to caller-allocated storage.
  *
- * If compat_ret is not NULL, it will be set to a return value
- * for compatibility with xf86 drivers.
+ * If caps is not NULL, it will be set to a bitmask containing
+ * information about glamor.
  */
-Bool glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret);
+Bool glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps);
 
 /*
  * Create an EGLDisplay from a native display type. This is a little quirky
@@ -121,5 +126,7 @@ glamor_egl_get_display(EGLint type, void *native)
 {
     return glamor_egl_get_display2(type, native, true);
 }
+
+int glamor_egl_get_fd(ScreenPtr screen);
 
 #endif

@@ -105,7 +105,7 @@ OR PERFORMANCE OF THIS SOFTWARE.
 #include "opaque.h"
 
 #ifdef XF86BIGFONT
-#include "xf86bigfontsrv.h"
+#include "Xext/xf86bigfont/xf86bigfontsrv.h"
 #endif
 
 #ifdef __clang__
@@ -136,7 +136,9 @@ static char __crashreporter_info_buff__[4096] = { 0 };
 
 static const char *__crashreporter_info__ __attribute__ ((__used__)) =
     &__crashreporter_info_buff__[0];
+/* NOLINTBEGIN(hicpp-no-assembler) */
 asm(".desc ___crashreporter_info__, 0x10");
+/* NOLINTEND(hicpp-no-assembler) */
 #endif
 
 /* Prefix strings for log messages. */
@@ -460,7 +462,7 @@ vpnprintf(char *string, int size_in, const char *f, va_list args)
     int f_idx = 0;
     int s_idx = 0;
     int f_len = strlen_sigsafe(f);
-    char *string_arg;
+    const char *string_arg;
     char number[21];
     int p_len;
     int i;
@@ -524,11 +526,11 @@ vpnprintf(char *string, int size_in, const char *f, va_list args)
         switch (f[f_idx]) {
         case 's':
             string_arg = va_arg(args, char*);
+            if (!string_arg)
+                string_arg = "(null)";
 
-            if (string_arg) {
-                for (i = 0; string_arg[i] != 0 && s_idx < size - 1 && s_idx < precision; i++)
-                    string[s_idx++] = string_arg[i];
-            }
+            for (i = 0; string_arg[i] != 0 && s_idx < size - 1 && s_idx < precision; i++)
+                string[s_idx++] = string_arg[i];
             break;
 
         case 'u':

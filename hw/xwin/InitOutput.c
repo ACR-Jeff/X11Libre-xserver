@@ -38,14 +38,15 @@ from The Open Group.
 #include "os/ddx_priv.h"
 #include "os/log_priv.h"
 #include "os/osdep.h"
-#include "xkb/xkbsrv_priv.h"
+#include "Xext/xkeyboard/xkbsrv_priv.h"
+#ifdef DPMSExtension
+#include "Xext/dpms/dpms_priv.h"
+#endif
+#include "Xext/pseudoramiX/pseudoramiX.h"
 
 #include "winmsg.h"
 #include "winconfig.h"
 #include "winprefs.h"
-#ifdef DPMSExtension
-#include "dpmsproc.h"
-#endif
 #ifdef __CYGWIN__
 #include <mntent.h>
 #endif
@@ -62,7 +63,6 @@ typedef WINAPI HRESULT(*SHGETFOLDERPATHPROC) (HWND hwndOwner,
 #endif
 
 #include "winmonitors.h"
-#include "pseudoramiX/pseudoramiX.h"
 
 #include "glx_extinit.h"
 #ifdef XWIN_GLX_WINDOWS

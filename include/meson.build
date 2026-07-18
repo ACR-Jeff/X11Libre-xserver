@@ -99,23 +99,21 @@ conf_data.set('HAVE_XSHMFENCE', xshmfence_dep.found() ? '1' : false)
 conf_data.set('WITH_LIBDRM', libdrm_required ? '1' : false)
 conf_data.set('LIBDRM_HAS_PLANE_SIZE_HINTS', libdrm_required ? libdrm_dep.version().version_compare('>= 2.4.122') : false)
 conf_data.set('GLAMOR_HAS_EGL', epoxy_dep.found() ? '1' : false)
-conf_data.set('GLAMOR_HAS_EGL_QUERY_DMABUF',
-              epoxy_dep.found() and epoxy_dep.version().version_compare('>= 1.4.4') ? '1' : false)
-conf_data.set('GLAMOR_HAS_EGL_QUERY_DRIVER',
-              epoxy_dep.found() and epoxy_dep.version().version_compare('>= 1.5.4') ? '1' : false)
 conf_data.set('GLXEXT', build_glx ? '1' : false)
 conf_data.set('GLAMOR', build_glamor ? '1' : false)
-conf_data.set('GLAMOR_HAS_GBM', gbm_dep.found() ? '1' : false)
+conf_data.set('GLAMOR_HAS_GBM', build_gbm ? '1' : false)
 conf_data.set('GBM_BO_WITH_MODIFIERS',
-              build_glamor and gbm_dep.found() and gbm_dep.version().version_compare('>= 17.1') ? '1' : false)
+              build_glamor and build_gbm and gbm_dep.version().version_compare('>= 17.1') ? '1' : false)
+conf_data.set('GBM_BO_FD',
+              build_glamor and gbm_dep.found() and cc.has_header_symbol('gbm.h', 'gbm_bo_get_fd', dependencies : gbm_dep )  ? '1' : false)
 conf_data.set('GBM_BO_FD_FOR_PLANE',
-              build_glamor and gbm_dep.found() and gbm_dep.version().version_compare('>= 21.1') ? '1' : false)
+              build_glamor and build_gbm and gbm_dep.version().version_compare('>= 21.1') ? '1' : false)
 conf_data.set('GBM_BO_WITH_MODIFIERS2',
-              build_glamor and gbm_dep.found() and gbm_dep.version().version_compare('>= 21.3') ? '1' : false)
+              build_glamor and build_gbm and gbm_dep.version().version_compare('>= 21.3') ? '1' : false)
 conf_data.set('GBM_HAVE_BO_USE_LINEAR',
-              build_glamor and gbm_dep.found() and cc.has_header_symbol('gbm.h', 'GBM_BO_USE_LINEAR', dependencies : gbm_dep )  ? '1' : false)
+              build_glamor and build_gbm and cc.has_header_symbol('gbm.h', 'GBM_BO_USE_LINEAR', dependencies : gbm_dep )  ? '1' : false)
 conf_data.set('GBM_HAVE_BO_USE_FRONT_RENDERING',
-              build_glamor and gbm_dep.found() and cc.has_header_symbol('gbm.h','GBM_BO_USE_FRONT_RENDERING', dependencies: gbm_dep ) ? '1' : false)
+              build_glamor and build_gbm and cc.has_header_symbol('gbm.h','GBM_BO_USE_FRONT_RENDERING', dependencies: gbm_dep ) ? '1' : false)
 
 conf_data.set_quoted('SERVER_MISC_CONFIG_PATH', serverconfigdir)
 conf_data.set_quoted('PROJECTROOT', get_option('prefix'))
@@ -133,12 +131,17 @@ conf_data.set('HAVE_FNMATCH_H', cc.has_header('fnmatch.h') ? '1' : false)
 conf_data.set('HAVE_LINUX_AGPGART_H', cc.has_header('linux/agpgart.h') ? '1' : false)
 conf_data.set('HAVE_STRINGS_H', cc.has_header('strings.h') ? '1' : false)
 conf_data.set('HAVE_SYS_AGPGART_H', cc.has_header('sys/agpgart.h') ? '1' : false)
+conf_data.set('HAVE_SYS_FILIO_H', cc.has_header('sys/filio.h') ? '1' : false)
+conf_data.set('HAVE_SYS_PARAM_H', cc.has_header('sys/param.h') ? '1' : false)
+conf_data.set('HAVE_SYS_SOCKIO_H', cc.has_header('sys/sockio.h') ? '1' : false)
+conf_data.set('HAVE_SYS_STROPTS_H', cc.has_header('sys/stropts.h') ? '1' : false)
 conf_data.set('HAVE_SYS_UCRED_H', cc.has_header('sys/ucred.h') ? '1' : false)
 conf_data.set('HAVE_SYS_UN_H', cc.has_header('sys/un.h') ? '1' : false)
 conf_data.set('HAVE_SYS_UTSNAME_H', cc.has_header('sys/utsname.h') ? '1' : false)
 conf_data.set('HAVE_SYS_SYSMACROS_H', cc.has_header('sys/sysmacros.h') ? '1' : false)
 
 conf_data.set('HAVE_ARC4RANDOM_BUF', cc.has_function('arc4random_buf', dependencies: libbsd_dep) ? '1' : false)
+conf_data.set('HAVE_GETRANDOM', cc.has_function('getrandom', prefix: '#include <sys/random.h>') ? '1' : false)
 conf_data.set('HAVE_BACKTRACE', cc.has_function('backtrace') ? '1' : false)
 conf_data.set('HAVE_CBRT', cc.has_function('cbrt') ? '1' : false)
 conf_data.set('HAVE_EPOLL_CREATE1', cc.has_function('epoll_create1',dependencies:epoll_dep, prefix:'#include<sys/epoll.h>') ? '1' : false)
@@ -202,8 +205,9 @@ conf_data.set(
   'BSD44SOCKETS',
   cc.has_member(
      'struct sockaddr_in', 'sin_len',
-     prefix: ['#include <sys/types.h>', '#include <sys/socket.h>',
-              '#include <netinet/in.h>'],
+     prefix: '''#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>''',
   )  ? '1' : false,
   description: 'Define to 1 if `struct sockaddr_in\' has a `sin_len\' member',
 )
@@ -277,6 +281,12 @@ conf_data.set('X_REGISTRY_REQUEST', build_registry_request ? '1' : false)
 conf_data.set('HAVE_SHA1_IN_' + sha1.to_upper(), '1', description: 'Use @0@ SHA1 functions'.format(sha1))
 conf_data.set('HAVE_LIBUNWIND', get_option('libunwind'))
 
+debug_writetoclient = get_option('debug_writetoclient')
+conf_data.set('CONFIG_DEBUG_WRITETOCLIENT',
+              debug_writetoclient != 'none' ? '1' : false)
+conf_data.set('CONFIG_DEBUG_WRITETOCLIENT_BACKTRACE',
+              debug_writetoclient == 'backtrace' ? '1' : false)
+
 conf_data.set('HAVE_APM', (build_apm or build_acpi) ? '1' : false)
 conf_data.set('HAVE_ACPI', build_acpi ? '1' : false)
 
@@ -337,6 +347,12 @@ conf_data.set_quoted('XCONFIGFILE', 'xorg.conf')
 conf_data.set_quoted('__XSERVERNAME__', 'Xorg')
 conf_data.set('WITH_VGAHW', build_vgahw ? '1' : false)
 conf_data.set('CSRG_BASED', csrg_based ? '1' : false)
+# BSD console-driver support (the xf86Info.consType machinery + the
+# hw/xfree86/os-support/bsd/ console_*.c backends). True on the BSD-derived
+# systems (csrg_based) plus GNU/kFreeBSD, matching the old
+# `CSRG_BASED || __FreeBSD_kernel__` guard exactly.
+conf_data.set('CONFIG_BSD_CONSOLE',
+              (csrg_based or host_machine.system() == 'kfreebsd') ? '1' : false)
 conf_data.set('PCVT_SUPPORT', supports_pcvt ? '1' : false)
 conf_data.set('SYSCONS_SUPPORT', supports_syscons ? '1' : false)
 conf_data.set('WSCONS_SUPPORT', supports_wscons ? '1' : false)
@@ -482,7 +498,6 @@ if build_xorg_sdk
             'migc.h',
             'mi.h',
             'miline.h',
-            'mioverlay.h',
             'mipointer.h',
             'mipointrst.h',
             'mistruct.h',

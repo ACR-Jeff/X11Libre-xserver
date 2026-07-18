@@ -53,8 +53,9 @@ SOFTWARE.
 #include "dix/extension_priv.h"
 #include "dix/registry_priv.h"
 #include "dix/request_priv.h"
+#include "include/misc.h"
+#include "os/mathx_priv.h"
 
-#include "misc.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
 #include "gcstruct.h"
@@ -291,19 +292,15 @@ ExtensionAvailable(ClientPtr client, ExtensionEntry *ext)
 int
 ProcQueryExtension(ClientPtr client)
 {
-    REQUEST(xQueryExtensionReq);
-    REQUEST_AT_LEAST_SIZE(xQueryExtensionReq);
-
-    if (client->swapped)
-        swaps(&stuff->nbytes);
-
+    X_REQUEST_HEAD_AT_LEAST(xQueryExtensionReq);
+    X_REQUEST_FIELD_CARD16(nbytes);
     REQUEST_FIXED_SIZE(xQueryExtensionReq, stuff->nbytes);
 
     xQueryExtensionReply reply = { 0 };
 
     if (NumExtensions && extensions) {
         char extname[PATH_MAX] = { 0 };
-        strncpy(extname, (char *) &stuff[1], min(stuff->nbytes, sizeof(extname)-1));
+        strncpy(extname, (char *) &stuff[1], MIN(stuff->nbytes, sizeof(extname)-1));
         ExtensionEntry *extEntry = CheckExtension(extname);
 
         if (extEntry && ExtensionAvailable(client, extEntry)) {

@@ -38,6 +38,7 @@
  */
 #include <xorg-config.h>
 
+#include <assert.h>
 #include <string.h>
 #include <X11/X.h>
 #include <X11/Xproto.h>
@@ -50,6 +51,7 @@
 #include "dix/request_priv.h"
 #include "dix/screen_hooks_priv.h"
 #include "include/extinit.h"
+#include "include/misc.h"
 #include "mi/mi_priv.h"
 
 #include "xf86.h"
@@ -66,7 +68,6 @@
 #include "xf86Xinput.h"
 #include "eventstr.h"
 #include "xf86Extensions.h"
-#include "misc.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
 #include "cursorstr.h"
@@ -1144,14 +1145,14 @@ typedef struct {
 } DGAPrivRec, *DGAPrivPtr;
 
 #define DGA_GETCLIENT(idx) ((ClientPtr) \
-    dixLookupPrivate(&screenInfo.screens[idx]->devPrivates, DGAScreenPrivateKey))
+    dixLookupPrivate(&screenInfo.screens[(idx)]->devPrivates, DGAScreenPrivateKey))
 #define DGA_SETCLIENT(idx,p) \
-    dixSetPrivate(&screenInfo.screens[idx]->devPrivates, DGAScreenPrivateKey, p)
+    dixSetPrivate(&screenInfo.screens[(idx)]->devPrivates, DGAScreenPrivateKey, (p))
 
 #define DGA_GETPRIV(c) ((DGAPrivPtr) \
     dixLookupPrivate(&(c)->devPrivates, DGAClientPrivateKey))
 #define DGA_SETPRIV(c,p) \
-    dixSetPrivate(&(c)->devPrivates, DGAClientPrivateKey, p)
+    dixSetPrivate(&(c)->devPrivates, DGAClientPrivateKey, (p))
 
 static void
 XDGAResetProc(ExtensionEntry * extEntry)
@@ -1291,7 +1292,7 @@ ProcXDGAQueryModes(ClientPtr client)
         info.reserved2 = mode[i].reserved2;
 
         x_rpcbuf_write_CARD8s(&rpcbuf, (CARD8*)&info, sz_xXDGAModeInfo);
-        x_rpcbuf_write_CARD8s(&rpcbuf, (CARD8*)mode[i].name, size);
+        x_rpcbuf_write_string_0t_pad(&rpcbuf, mode[i].name);
     }
 
     free(mode);

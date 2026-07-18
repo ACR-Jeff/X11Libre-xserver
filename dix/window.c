@@ -108,21 +108,24 @@ Equipment Corporation.
 #include "dix/property_priv.h"
 #include "dix/request_priv.h"
 #include "dix/resource_priv.h"
+#include "dix/saveset_priv.h"
 #include "dix/screenint_priv.h"
 #include "dix/screensaver_priv.h"
 #include "dix/selection_priv.h"
 #include "dix/screenint_priv.h"
 #include "dix/window_priv.h"
 #include "include/extinit.h"
+#include "include/misc.h"
 #include "mi/mi_priv.h"         /* miPaintWindow */
 #include "os/auth.h"
 #include "os/client_priv.h"
+#include "os/mathx_priv.h"
 #include "os/osdep.h"
 #include "os/screensaver.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
+#include "Xext/composite/compint.h"
+#include "Xext/panoramiX/panoramiX.h"
+#include "Xext/panoramiX/panoramiXsrv.h"
 
-#include "misc.h"
 #include "scrnintstr.h"
 #include "os.h"
 #include "regionstr.h"
@@ -136,7 +139,6 @@ Equipment Corporation.
 #include "gcstruct.h"
 #include "servermd.h"
 #include "globals.h"
-#include "compint.h"
 #include "privates.h"
 #include "xace.h"
 
@@ -179,15 +181,15 @@ static Bool TileScreenSaver(ScreenPtr pScreen, int kind);
 	( ((b1)->y1 >= (b2)->y2)) ) )
 
 #define RedirectSend(pWin) \
-    ((pWin->eventMask|wOtherEventMasks(pWin)) & SubstructureRedirectMask)
+    (((pWin)->eventMask|wOtherEventMasks((pWin))) & SubstructureRedirectMask)
 
 #define SubSend(pWin) \
-    ((pWin->eventMask|wOtherEventMasks(pWin)) & SubstructureNotifyMask)
+    (((pWin)->eventMask|wOtherEventMasks((pWin))) & SubstructureNotifyMask)
 
 #define StrSend(pWin) \
-    ((pWin->eventMask|wOtherEventMasks(pWin)) & StructureNotifyMask)
+    (((pWin)->eventMask|wOtherEventMasks((pWin))) & StructureNotifyMask)
 
-#define SubStrSend(pWin,pParent) (StrSend(pWin) || SubSend(pParent))
+#define SubStrSend(pWin,pParent) (StrSend((pWin)) || SubSend((pParent)))
 
 static const char *overlay_win_name = "<composite overlay>";
 
@@ -206,7 +208,7 @@ get_window_name(WindowPtr pWin)
     for (PropertyPtr prop = pWin->properties; prop; prop = prop->next) {
         if (prop->propertyName == XA_WM_NAME && prop->type == XA_STRING &&
             prop->data) {
-            len = min(prop->size, WINDOW_NAME_BUF_LEN - 1);
+            len = MIN(prop->size, WINDOW_NAME_BUF_LEN - 1);
             memcpy(buf, prop->data, len);
             buf[len] = '\0';
             return buf;
@@ -503,7 +505,6 @@ MakeRootTile(WindowPtr pWin)
     ScreenPtr pScreen = pWin->drawable.pScreen;
     GCPtr pGC;
     unsigned char back[128];
-    int len = BitmapBytePad(sizeof(long));
     unsigned char *to;
 
     pWin->background.pixmap = (*pScreen->CreatePixmap) (pScreen, 4, 4,
@@ -530,6 +531,7 @@ MakeRootTile(WindowPtr pWin)
         = (screenInfo.bitmapBitOrder == LSBFirst) ? _back_lsb : _back_msb;
     to = back;
 
+    size_t len = BitmapBytePad(sizeof(long));
     for (int i = 4; i > 0; i--, from++)
         for (int j = len; j > 0; j--)
             *to++ = *from;
@@ -1443,7 +1445,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
                     .u.colormap.window = pWin->drawable.id,
                     .u.colormap.colormap = cmap,
                     .u.colormap.new = xTrue,
-                    .u.colormap.state = IsMapInstalled(cmap, pWin)
+                    .u.colormap.state = (!!IsMapInstalled(cmap, pWin))
                 };
                 xE.u.u.type = ColormapNotify;
                 DeliverEvents(pWin, &xE, 1, NullWindow);
@@ -1586,7 +1588,7 @@ ProcGetWindowAttributes(ClientPtr client)
                      (pWin->realized ? IsViewable : IsUnviewable)),
         .colormap = wColormap(pWin),
         .mapInstalled = (wColormap(pWin) == None) ? xFalse
-            : IsMapInstalled(wColormap(pWin), pWin),
+            : (!!IsMapInstalled(wColormap(pWin), pWin)),
         .yourEventMask = EventMaskForClient(pWin, client),
         .allEventMasks = pWin->eventMask | wOtherEventMasks(pWin),
         .doNotPropagateMask = wDontPropagateMask(pWin),
@@ -1876,22 +1878,22 @@ ResizeChildrenWinSize(WindowPtr pWin, int dx, int dy, int dw, int dh)
 }
 
 #define GET_INT16(m, f) \
-	if (m & mask) \
+	if ((m) & mask) \
 	  { \
-	     f = (INT16) *pVlist;\
+	     (f) = (INT16) *pVlist;\
 	    pVlist++; \
 	 }
 #define GET_CARD16(m, f) \
-	if (m & mask) \
+	if ((m) & mask) \
 	 { \
-	    f = (CARD16) *pVlist;\
+	    (f) = (CARD16) *pVlist;\
 	    pVlist++;\
 	 }
 
 #define GET_CARD8(m, f) \
-	if (m & mask) \
+	if ((m) & mask) \
 	 { \
-	    f = (CARD8) *pVlist;\
+	    (f) = (CARD8) *pVlist;\
 	    pVlist++;\
 	 }
 
@@ -2916,11 +2918,11 @@ UnmapSubwindows(WindowPtr pWin)
 void
 HandleSaveSet(ClientPtr client)
 {
-    WindowPtr pParent, pWin;
-
-    for (unsigned j = 0; j < client->numSaved; j++) {
-        pWin = SaveSetWindow(client->saveSet[j]);
-        if (SaveSetToRoot(client->saveSet[j]))
+    SaveSetEntry *walk, *tmp;
+    xorg_list_for_each_entry_safe(walk, tmp, &client->saveSets, entry) {
+        WindowPtr pParent = NULL;
+        WindowPtr pWin = walk->windowPtr;
+        if (walk->toRoot)
             pParent = pWin->drawable.pScreen->root;
         else
         {
@@ -2931,7 +2933,7 @@ HandleSaveSet(ClientPtr client)
         if (pParent) {
             if (pParent != pWin->parent) {
                 /* unmap first so that ReparentWindow doesn't remap */
-                if (!SaveSetShouldMap(client->saveSet[j]))
+                if (!walk->map)
                     UnmapWindow(pWin, FALSE);
                 ReparentWindow(pWin, pParent,
                                pWin->drawable.x - wBorderWidth(pWin) -
@@ -2941,13 +2943,13 @@ HandleSaveSet(ClientPtr client)
                 if (!pWin->realized && pWin->mapped)
                     pWin->mapped = FALSE;
             }
-            if (SaveSetShouldMap(client->saveSet[j]))
+            if (walk->map)
                 MapWindow(pWin, client);
         }
+
+        xorg_list_del(&walk->entry);
+        free(walk);
     }
-    free(client->saveSet);
-    client->numSaved = 0;
-    client->saveSet = NULL;
 }
 
 /**
@@ -3240,10 +3242,6 @@ TileScreenSaver(ScreenPtr pScreen, int kind)
             }
             else
                 cursor = 0;
-        }
-        else {
-            free(srcbits);
-            free(mskbits);
         }
     }
 

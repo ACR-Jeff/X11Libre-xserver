@@ -70,8 +70,9 @@ __stdcall unsigned long GetTickCount(void);
 #include <sys/time.h>
 #include <sys/resource.h>
 #endif
-#include "misc.h"
 #include <X11/X.h>
+
+#include "os/mathx_priv.h"
 #include "os/Xtrans.h"
 
 #include <libgen.h>
@@ -106,6 +107,7 @@ __stdcall unsigned long GetTickCount(void);
 #include "dix/input_priv.h"
 #include "dix/settings_priv.h"
 #include "dix/screensaver_priv.h"
+#include "include/misc.h"
 #include "miext/extinit_priv.h"
 #include "os/audit_priv.h"
 #include "os/auth.h"
@@ -117,15 +119,15 @@ __stdcall unsigned long GetTickCount(void);
 #include "os/osdep.h"
 #include "os/serverlock.h"
 #include "os/xhostname.h"
-#include "present/present_priv.h"
-#include "Xext/xf86bigfontsrv.h" /* XF86BigfontCleanup() */
-#include "xkb/xkbsrv_priv.h"
+#include "Xext/dpms/dpms_priv.h"
+#include "Xext/present/present_priv.h"
+#include "Xext/xf86bigfont/xf86bigfontsrv.h" /* XF86BigfontCleanup() */
+#include "Xext/xkeyboard/xkbsrv_priv.h"
 
 #include "dixstruct.h"
 #include "picture.h"
 #include "miinitext.h"
 #include "dixstruct_priv.h"
-#include "dpmsproc.h"
 
 #define X_INCLUDE_NETDB_H
 #include <X11/Xos_r.h>
@@ -653,7 +655,7 @@ ProcessCommandLine(int argc, char *argv[])
             terminateDelay = -1;
             if ((i + 1 < argc) && (isdigit((unsigned char)*argv[i + 1])))
                terminateDelay = atoi(argv[++i]);
-            terminateDelay = max(0, terminateDelay);
+            terminateDelay = MAX(0, terminateDelay);
         }
         else if (strcmp(argv[i], "-tst") == 0) {
             noTestExtensions = TRUE;
@@ -812,10 +814,6 @@ set_font_authorizations(char **authorizations, int *authlen, void *client)
         struct addrinfo hints, *ai = NULL;
 #else
         struct hostent *host;
-
-#ifdef XTHREADS_NEEDS_BYNAMEPARAMS
-        _Xgethostbynameparams hparams;
-#endif
 #endif
 
         struct xhostname hn;

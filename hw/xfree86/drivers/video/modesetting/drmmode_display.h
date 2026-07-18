@@ -100,6 +100,8 @@ typedef struct {
     OptionInfoPtr Options;
 
     Bool glamor;
+    Bool glamor_gbm;
+    Bool glamor_gbm_device;
     Bool shadow_enable;
     Bool shadow_enable2;
     /** Is Option "PageFlip" enabled? */
@@ -308,7 +310,7 @@ typedef struct _msSpritePriv {
     Bool sprite_visible;
 } msSpritePrivRec, *msSpritePrivPtr;
 
-#define msGetSpritePriv(dev, ms, screen) dixLookupScreenPrivate(&(dev)->devPrivates, &(ms)->drmmode.spritePrivateKeyRec, screen)
+#define msGetSpritePriv(dev, ms, screen) dixLookupScreenPrivate(&(dev)->devPrivates, &(ms)->drmmode.spritePrivateKeyRec, (screen))
 
 extern miPointerSpriteFuncRec drmmode_sprite_funcs;
 

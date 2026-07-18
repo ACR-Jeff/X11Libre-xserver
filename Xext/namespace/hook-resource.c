@@ -28,6 +28,10 @@ void hookResourceAccess(CallbackListPtr *pcbl, void *unused, void *calldata)
     if (param->client == serverClient)
         goto pass;
 
+    // no restriction on super power
+    if (subj->ns->superPower)
+        goto pass;
+
     // special filtering for windows: block transparency for untrusted clients
     if (param->rtype == X11_RESTYPE_WINDOW) {
         WindowPtr pWindow = (WindowPtr) param->res;
@@ -69,6 +73,7 @@ void hookResourceAccess(CallbackListPtr *pcbl, void *unused, void *calldata)
 
                 case X_CreateGC:
                 case X_CreatePixmap:
+                case X_CreateColormap:
                     if (checkAllowed(param->access_mode, DixGetAttrAccess))
                         goto pass;
                 break;

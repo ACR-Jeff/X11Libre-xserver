@@ -7,7 +7,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "misc.h"
+
+#include "include/misc.h"
+
 #include "xf86Parser_priv.h"
 #include "configProcs.h"
 #include "os.h"
@@ -93,7 +95,7 @@ xf86createMatchGroup(const char *arg, xf86MatchMode pref_mode,
         pattern->mode = MATCH_REGEX;
         str ++;
         if (*str) {
-            char *last;
+            const char *last;
             last = strchr(str+1, *str);
             if (last)
                 n = last-str-1;

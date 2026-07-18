@@ -1,6 +1,7 @@
 srcs_xorg_compat = [
     'clientexception.c',
     'log.c',
+    'mioverlay.c',
     'nvidiabug.c',
     'ones.c',
     'xf86Helper.c',
@@ -26,4 +27,22 @@ configure_file(
     output: '10-nvidia.conf',
     configuration: nvidia_conf,
     install_dir: join_paths(get_option('datadir'), 'X11/xorg.conf.d'),
+)
+configure_file(
+    input: '10-nvidia-modules.conf.in',
+    output: '10-nvidia-modules.conf',
+    configuration: nvidia_conf,
+    install_dir: join_paths(get_option('datadir'), 'X11/xorg.conf.d'),
+)
+configure_file(
+    input: '10-nvidia.conf.debian.in',
+    output: '10-nvidia.conf.debian',
+    configuration: nvidia_conf,
+    install_dir: join_paths(get_option('sysconfdir'), 'X11/xorg.conf.d'),
+)
+configure_file(
+    input: '10-nvidia-modules.conf.debian.in',
+    output: '10-nvidia-modules.conf.debian',
+    configuration: nvidia_conf,
+    install_dir: join_paths(get_option('sysconfdir'), 'X11/xorg.conf.d'),
 )

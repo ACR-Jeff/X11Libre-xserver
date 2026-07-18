@@ -2,19 +2,18 @@ project('xserver', 'c',
         default_options: [
             'buildtype=debugoptimized',
             'c_std=gnu99',
+            'warning_level=1',
         ],
-        version: '25.1.0',
+        version: '25.2.0',
         meson_version: '>= 0.61.0',
 )
-release_date = '2025-12-21'
+release_date = '2026-06-21'
 
 cc = meson.get_compiler('c')
 
 add_project_arguments('-fno-strict-aliasing', language : 'c')
 add_project_arguments('-fvisibility=hidden', language : 'c')
-add_project_arguments('-Wvla', language: 'c')
 add_project_arguments('-fno-common', language: 'c')
-add_project_arguments('-Wshift-negative-value', language: 'c')
 add_project_arguments('-Wchar-subscripts', language: 'c')
 
 # workaround for mesa bug causing GLsync to be typedef'ed multiple times
@@ -37,7 +36,6 @@ conf_data.set('_DIX_CONFIG_H_', '1')
 
 if cc.get_id() == 'gcc' or cc.get_id() == 'clang'
     test_wflags = [
-        '-Wall',
         '-Wchar-subscripts',
         '-Wpointer-arith',
         '-Wmissing-declarations',
@@ -67,6 +65,7 @@ if cc.get_id() == 'gcc' or cc.get_id() == 'clang'
         '-Werror=int-to-pointer-cast',
         '-Werror=pointer-to-int-cast',
         '-Woverride-init',
+        '-Wshift-negative-value',
         '-Wvla',
         '-Wincompatible-pointer-types',
     ]
@@ -388,6 +387,22 @@ if build_glamor
     epoxy_dep = dependency('epoxy', required: false)
 endif
 
+gbm_option = get_option('gbm')
+if gbm_option == 'auto'
+    build_gbm = gbm_dep.found()
+else
+    build_gbm = (gbm_option == 'true')
+endif
+
+if build_gbm and not gbm_dep.found()
+    error('libgbm support requested, but libgbm is not available')
+endif
+
+# Don't even link to libgbm
+if not build_gbm
+    gbm_dep = dependency('', required: false)
+endif
+
 # Lots of sha1 options, because Linux is about choice :)
 
 # The idea behind the ordering here is that we should first prefer system
@@ -548,7 +563,7 @@ if not libdrm_dep.found() and libdrm_required
     error('DRI requested, but LIBDRM not found')
 endif
 
-build_modesetting = libdrm_dep.found() and dri2proto_dep.found() and gbm_dep.found()
+build_modesetting = libdrm_dep.found() and dri2proto_dep.found() and build_gbm
 
 build_vgahw = false
 if get_option('vgahw') == 'auto'
@@ -666,8 +681,6 @@ inc = include_directories(
     '.',
     'Xext',
     'Xext/dri2',
-    'Xi',
-    'composite',
     'exa',
     'fb',
     'glamor',
@@ -675,14 +688,8 @@ inc = include_directories(
     'miext/damage',
     'miext/shadow',
     'miext/sync',
-    'dbe',
     'dix',
-    'dri3',
     'include',
-    'present',
-    'randr',
-    'render',
-    'xfixes',
     epoll_inc,
 )
 
@@ -712,8 +719,6 @@ endif
 if get_option('libunwind')
     common_dep += dependency('libunwind', required: true)
 endif
-
-glx_inc = include_directories('glx')
 
 top_dir_inc = include_directories('.')
 
@@ -776,30 +781,16 @@ subdir('doc')
 if build_xserver
     subdir('config')
     subdir('dix')
-    subdir('dri3')
-    subdir('glx')
     subdir('fb')
     subdir('mi')
     subdir('os')
-    subdir('composite')
-    subdir('dbe')
     subdir('miext/damage')
     subdir('miext/shadow')
     subdir('miext/sync')
     if build_rootless
         subdir('miext/rootless')
     endif
-    subdir('present')
-    if build_xwin or build_xquartz
-        subdir('pseudoramiX')
-    endif
-    subdir('randr')
-    subdir('record')
-    subdir('render')
-    subdir('xfixes')
-    subdir('xkb')
     subdir('Xext')
-    subdir('Xi')
     if build_glamor
         subdir('glamor')
     endif
@@ -818,16 +809,34 @@ if build_xserver
         libxserver_miext_damage,
         libxserver_render,
         libxserver_present,
+        libxserver_xres,
         libxserver_xext,
+        libxserver_xcmisc,
+        libxserver_sync,
+        libxserver_security,
         libxserver_miext_sync,
         libxserver_xfixes,
         libxserver_xi,
-        libxserver_xkb,
+        libxserver_xkeyboard,
         libxserver_record,
         libxserver_os,
         libxserver_dri2,
-        libxserver_dri3
+        libxserver_dri3,
+        libxserver_xinerama,
+        libxserver_xf86bigfont,
+        libxserver_shm,
+        libxserver_dpms,
+        libxserver_xv,
+        libxserver_xtest,
+        libxserver_shape,
+        libxserver_saver,
+        libxserver_bigreq,
+        libxserver_geext
     ]
+
+    if build_xselinux
+        libxserver += libxserver_xselinux
+    endif
 
     if build_namespace
         subdir('Xext/namespace')

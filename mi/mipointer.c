@@ -48,20 +48,20 @@ in this Software without prior written authorization from The Open Group.
 
 #include <dix-config.h>
 
-#include   <X11/X.h>
-#include   <X11/Xmd.h>
-#include   <X11/Xproto.h>
+#include <X11/X.h>
+#include <X11/Xmd.h>
+#include <X11/Xproto.h>
 
-#include   "dix/cursor_priv.h"
-#include   "dix/dix_priv.h"
-#include   "dix/input_priv.h"
-#include   "dix/inpututils_priv.h"
-#include   "dix/screen_hooks_priv.h"
-#include   "include/extinit.h"
-#include   "mi/mi_priv.h"
-#include   "mi/mipointer_priv.h"
+#include "dix/cursor_priv.h"
+#include "dix/dix_priv.h"
+#include "dix/input_priv.h"
+#include "dix/inpututils_priv.h"
+#include "dix/screen_hooks_priv.h"
+#include "include/extinit.h"
+#include "include/misc.h"
+#include "mi/mi_priv.h"
+#include "mi/mipointer_priv.h"
 
-#include   "misc.h"
 #include   "windowstr.h"
 #include   "pixmapstr.h"
 #include   "scrnintstr.h"
@@ -87,14 +87,14 @@ DevPrivateKeyRec miPointerScreenKeyRec;
 
 #define GetScreenPrivate(s) ((miPointerScreenPtr) \
     dixLookupPrivate(&(s)->devPrivates, miPointerScreenKey))
-#define SetupScreen(s)	miPointerScreenPtr  pScreenPriv = GetScreenPrivate(s)
+#define SetupScreen(s)	miPointerScreenPtr  pScreenPriv = GetScreenPrivate((s))
 
 DevPrivateKeyRec miPointerPrivKeyRec;
 
 #define MIPOINTER(dev) \
-    (InputDevIsFloating(dev) ? \
+    (InputDevIsFloating((dev)) ? \
         (miPointerPtr)dixLookupPrivate(&(dev)->devPrivates, miPointerPrivKey): \
-        (miPointerPtr)dixLookupPrivate(&(GetMaster(dev, MASTER_POINTER))->devPrivates, miPointerPrivKey))
+        (miPointerPtr)dixLookupPrivate(&(GetMaster((dev), MASTER_POINTER))->devPrivates, miPointerPrivKey))
 
 static Bool miPointerRealizeCursor(DeviceIntPtr pDev, ScreenPtr pScreen,
                                    CursorPtr pCursor);
@@ -310,7 +310,7 @@ miRecolorCursor(DeviceIntPtr pDev, ScreenPtr pScr,
     pScr->UnrealizeCursor(pDev, pScr, pCurs);
     pScr->RealizeCursor(pDev, pScr, pCurs);
     if (displayed)
-        pScr->DisplayCursor(pDev, pScr, pCurs);
+        dixScreenRaiseDisplayCursor(pScr, pDev, pCurs);
 }
 
 /**

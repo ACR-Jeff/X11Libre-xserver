@@ -50,6 +50,7 @@ SOFTWARE.
 
 #include <X11/Xdefs.h>
 
+#include <errno.h>
 #include <limits.h>
 #include <signal.h>
 #include <stddef.h>
@@ -87,9 +88,35 @@ extern Bool NewOutputPending;
 #ifndef HAVE_ARC4RANDOM_BUF
 static inline void arc4random_buf(void *buf, size_t nbytes)
 {
+#ifdef HAVE_GETRANDOM
+    ssize_t pos = 0;
+    while (pos < len) {
+        ssize_t ret = getrandom(buf + pos, nbytes - pos, 0);
+        if (ret <= 0) {
+            if (ret < 0 && errno == EINTR)
+                continue;
+            FatalError("Cannot read random data via getrandom(): %s\n",
+                       strerror(errno));
+        }
+        pos += ret;
+    }
+#else
     int fd = open("/dev/urandom", O_RDONLY);
-    read(fd, buf, nbytes);
+    if (fd < 0)
+        FatalError("Cannot open /dev/urandom for random data generation\n");
+    ssize_t pos = 0;
+    while (pos < nbytes) {
+        ssize_t ret = read(fd, (unsigned char*)buf + pos, nbytes - pos);
+        if (ret <= 0) {
+            if (ret < 0 && errno == EINTR)
+                continue;
+            close(fd);
+            FatalError("Cannot read random data from /dev/urandom\n");
+        }
+        pos += ret;
+    }
     close(fd);
+#endif
 }
 #endif /* HAVE_ARC4RANDOM_BUF */
 
@@ -191,10 +218,8 @@ Ones(unsigned long mask)
 #endif
 
 /* static assert for protocol structure sizes */
-#ifndef __size_assert
-#define __size_assert(what, howmuch) \
+#define __SIZE_ASSERT(what, howmuch) \
   typedef char what##_size_wrong_[( !!(sizeof(what) == howmuch) )*2-1 ]
-#endif
 
 /*
  * like strlen(), but checking for NULL and return 0 in this case
